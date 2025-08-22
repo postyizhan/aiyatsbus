@@ -14,12 +14,11 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package cc.polarastrum.aiyatsbus.impl.nms.v12005_nms
+package cc.polarastrum.aiyatsbus.impl.nmsj21
 
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
-import org.bukkit.inventory.meta.ItemMeta
 import taboolib.common.util.unsafeLazy
 import taboolib.module.nms.nmsProxy
 
@@ -30,11 +29,11 @@ import taboolib.module.nms.nmsProxy
  * @author mical
  * @since 2024/5/5 20:20
  */
-abstract class NMS12005 {
+abstract class NMSJ21 {
 
     abstract fun getRepairCost(item: ItemStack): Int
 
-    abstract fun setRepairCost(item: ItemStack, cost: Int)
+    abstract fun setRepairCost(item: ItemStack, cost: Int) : ItemStack
 
     abstract fun adaptMerchantRecipe(merchantRecipeList: Any, player: Player)
 
@@ -42,6 +41,6 @@ abstract class NMS12005 {
 
     companion object {
 
-        val instance by unsafeLazy { nmsProxy<NMS12005>() }
+        val instance by unsafeLazy { nmsProxy<NMSJ21>() }
     }
 }

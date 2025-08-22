@@ -25,6 +25,7 @@ import cc.polarastrum.aiyatsbus.core.util.MathUtils.selectByWeight
 import cc.polarastrum.aiyatsbus.core.util.calcToDouble
 import cc.polarastrum.aiyatsbus.core.util.calcToInt
 import cc.polarastrum.aiyatsbus.core.util.serialized
+import com.google.common.collect.HashBasedTable
 import org.bukkit.Material
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.enchantments.EnchantmentOffer
@@ -37,11 +38,10 @@ import taboolib.common.LifeCycle
 import taboolib.common.platform.event.EventPriority
 import taboolib.common.platform.event.SubscribeEvent
 import taboolib.common.platform.function.console
-import taboolib.common.platform.function.info
 import taboolib.common.platform.function.registerLifeCycleTask
 import taboolib.common.platform.function.submit
 import taboolib.common.util.randomDouble
-import taboolib.common5.RandomList
+import taboolib.library.configuration.ConfigurationSection
 import taboolib.module.configuration.Config
 import taboolib.module.configuration.ConfigNode
 import taboolib.module.configuration.Configuration
@@ -49,7 +49,9 @@ import taboolib.module.configuration.conversion
 import taboolib.module.nms.MinecraftVersion
 import taboolib.module.nms.PacketSendEvent
 import taboolib.module.ui.InventoryViewProxy
+import taboolib.platform.util.onlinePlayers
 import taboolib.platform.util.serializeToByteArray
+import java.util.UUID
 import kotlin.random.Random
 
 @ConfigNode(bind = "core/mechanisms/enchanting_table.yml")
@@ -69,7 +71,7 @@ object EnchantingTableSupport {
      * 记录附魔台三个选项的附魔
      * 位置 to whichButton to (Enchantment to level)
      */
-    private val enchantmentOffers = mutableMapOf<String, List<EnchantmentOffer?>>()
+    private val enchantmentOffers = HashBasedTable.create<UUID, String, List<EnchantmentOffer?>>()
 
     @Config("core/mechanisms/enchanting_table.yml", autoReload = true)
     lateinit var conf: Configuration
@@ -118,6 +120,14 @@ object EnchantingTableSupport {
     @delegate:ConfigNode("privilege.chance")
     val moreEnchantPrivilege by conversion<List<String>, Map<String, String>> {
         mapOf(*map { it.split(":")[0] to it.split(":")[1] }.toTypedArray())
+    }
+
+    /**
+     * 出金播报
+     */
+    @delegate:ConfigNode("celebrate-notice")
+    val celebrateNotice by conversion<ConfigurationSection, Map<String, List<String>>>(defaultValue = emptyMap()) {
+        mapOf(*getKeys(false).map { it to getStringList(it) }.toTypedArray())
     }
 
     @ConfigNode("max_level_limit")
@@ -195,7 +205,7 @@ object EnchantingTableSupport {
         val bonus = event.enchantmentBonus.coerceAtMost(16)
         shelfAmount[location] = bonus
         // 记录附魔台三个附魔选项
-        enchantmentOffers[location] = event.offers.toList()
+        enchantmentOffers.put(event.enchanter.uniqueId, location, event.offers.toList())
         if (dataDrivenEnchantment) {
             // 预先为所有附魔项生成一个附魔
             val enchants = doPrepareEnchant(event.enchanter, event.item, bonus)
@@ -217,7 +227,7 @@ object EnchantingTableSupport {
         val item = event.item.clone()
         val cost = event.whichButton() + 1
         val bonus = shelfAmount[location] ?: 1
-        val enchantmentOfferHint = enchantmentOffers[location]?.get(event.whichButton()) ?: return
+        val enchantmentOfferHint = enchantmentOffers.get(event.enchanter.uniqueId, location)?.get(event.whichButton()) ?: return
 
         // 书附魔完变成附魔书
         if (item.type == Material.BOOK) item.type = Material.ENCHANTED_BOOK
@@ -244,9 +254,27 @@ object EnchantingTableSupport {
 
         // 对书的附魔，必须手动进行，因为原版处理会掉特殊附魔
         // 也许可以用更好的方法兼容，submit 有一定风险 FIXME
-        if (item.type == Material.BOOK) {
+        if (item.type == Material.ENCHANTED_BOOK) {
             submit {
                 event.inventory.setItem(0, result.second)
+            }
+        }
+
+        // 出金播报
+        event.enchantsToAdd.forEach { (enchant, level) ->
+            val rarity = (enchant as AiyatsbusEnchantment).rarity
+            (celebrateNotice[rarity.name] ?: celebrateNotice[rarity.id])?.let { lines ->
+                lines.forEach { line ->
+                    val type = line.substringBefore(":")
+                    onlinePlayers.forEach {
+                        val text = it.asLangOrNull(line.substringAfter(":"), event.enchanter.name to "player", enchant.displayName(level, true) to "enchant") ?: return@forEach
+                        when (type) {
+                            "actionbar" -> it.sendActionBar(text)
+                            "message" -> it.sendMessage(text)
+                            "title" -> it.sendTitle(text.split(";")[0], text.split(";")[1])
+                        }
+                    }
+                }
             }
         }
     }
