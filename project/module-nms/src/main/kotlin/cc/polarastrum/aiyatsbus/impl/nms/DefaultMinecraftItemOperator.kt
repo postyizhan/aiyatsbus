@@ -16,6 +16,7 @@
  */
 package cc.polarastrum.aiyatsbus.impl.nms
 
+import cc.polarastrum.aiyatsbus.core.Aiyatsbus
 import cc.polarastrum.aiyatsbus.core.MinecraftItemOperator
 import cc.polarastrum.aiyatsbus.core.toDisplayMode
 import cc.polarastrum.aiyatsbus.core.util.isNull
@@ -61,10 +62,8 @@ class DefaultMinecraftItemOperator : MinecraftItemOperator {
         return if (versionId >= 12005) {
             NMSJ21.instance.setRepairCost(item, cost)
         } else {
-            NMSItemTag.asBukkitCopy(
-                (NMSItemTag.asNMSCopy(item) as NMSItemStack).apply {
-                    setRepairCost(cost)
-                }
+            Aiyatsbus.api().getMinecraftAPI().getHelper().asCraftMirror(
+                (Aiyatsbus.api().getMinecraftAPI().getHelper().getCraftItemStackHandle(item) as NMSItemStack).setRepairCost(cost)
             )
         }
     }
@@ -115,7 +114,7 @@ class DefaultMinecraftItemOperator : MinecraftItemOperator {
     override fun damageItemStack(item: ItemStack, amount: Int, entity: LivingEntity): ItemStack {
         var stack = item
         val nmsStack = if (stack is CraftItemStack) {
-            val handle = stack.getProperty<NMSItemStack>("handle")
+            val handle = Aiyatsbus.api().getMinecraftAPI().getHelper().getCraftItemStackHandle(stack) as NMSItemStack
             if (handle == null || handle.isEmpty) {
                 return stack
             }
